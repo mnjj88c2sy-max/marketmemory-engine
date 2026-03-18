@@ -1,6 +1,4 @@
-// MarketMemory — Railway Keeper v8
-// Usa Chromium installato da Nixpacks — zero download aggiuntivi
-
+// MarketMemory — Railway Keeper v7
 const puppeteer = require('puppeteer-core');
 const { execSync } = require('child_process');
 
@@ -14,36 +12,31 @@ function ts()  { return new Date().toLocaleString('it-IT', { timeZone: TZ }); }
 function log(m){ console.log(`[${ts()}] ${m}`); }
 
 function findChromium() {
-  // Nixpacks installa 'chromium' — cerca tutti i path possibili
   const candidates = [
     process.env.PUPPETEER_EXECUTABLE_PATH,
     '/usr/bin/chromium',
     '/usr/bin/chromium-browser',
-    '/nix/var/nix/profiles/default/bin/chromium',
-    '/root/.nix-profile/bin/chromium',
+    '/usr/bin/google-chrome-stable',
+    '/usr/bin/google-chrome',
   ].filter(Boolean);
-
   for (const p of candidates) {
     try { execSync(`test -x "${p}"`, {stdio:'ignore'}); return p; } catch(_) {}
   }
-  // Fallback: which
-  for (const cmd of ['chromium','chromium-browser']) {
+  for (const cmd of ['chromium','chromium-browser','google-chrome']) {
     try { return execSync(`which ${cmd}`, {encoding:'utf8'}).trim(); } catch(_) {}
   }
-  throw new Error('Chromium non trovato. Candidati: ' + candidates.join(', '));
+  throw new Error('Chromium non trovato');
 }
 
 async function launch() {
   const chromePath = findChromium();
-  log(`Chromium: ${chromePath}`);
-
+  log(`Avvio Chromium: ${chromePath}`);
   const browser = await puppeteer.launch({
     executablePath: chromePath,
     headless: 'new',
     args: ['--no-sandbox','--disable-setuid-sandbox','--disable-dev-shm-usage',
            '--disable-gpu','--single-process','--no-zygote']
   });
-
   const page = await browser.newPage();
   page.on('console', msg => { if(msg.type()==='error') log(`[E] ${msg.text()}`); });
   page.on('pageerror', err => log(`[pageerror] ${err.message}`));
@@ -58,6 +51,8 @@ async function launch() {
       if (inp) { inp.value = k; inp.dispatchEvent(new Event('input')); }
     }, API_KEY);
     log('API key iniettata.');
+  } else {
+    log('WARN: MM_APIKEY non impostata.');
   }
 
   log('Reload...');
@@ -73,6 +68,7 @@ async function launch() {
   log(started ? 'Motore avviato.' : 'WARN: bottone Avvia non trovato.');
 
   await new Promise(r => setTimeout(r, 8000));
+  log('Keeper pronto.');
   return { browser, page };
 }
 
@@ -83,11 +79,11 @@ async function checkAlive(page) {
       if (!s) return { ok: false, reason: 'state undefined' };
       return {
         ok: true,
-        open: s.paper && s.paper.open ? s.paper.open.length : 0,
+        open:   s.paper && s.paper.open   ? s.paper.open.length   : 0,
         closed: s.paper && s.paper.closed ? s.paper.closed.length : 0,
         regime: s.lastAnalysis && s.lastAnalysis.regimeResult
                 ? s.lastAnalysis.regimeResult.regime : '?',
-        key: s.apiKey ? 'OK' : 'MISSING'
+        key:    s.apiKey ? 'OK' : 'MISSING'
       };
     } catch(e) { return { ok: false, reason: e.message }; }
   });
@@ -109,7 +105,7 @@ async function run() {
         log(`WARN: ${a.reason}`);
         await page.evaluate(() => {
           var b = Array.from(document.querySelectorAll('button'))
-            .find(b => b.innerText.includes('Avvia')||b.innerText.includes('Start'));
+            .find(b => b.innerText.includes('Avvia') || b.innerText.includes('Start'));
           if (b) b.click();
         });
       }
@@ -119,7 +115,7 @@ async function run() {
         await new Promise(r => setTimeout(r, 3000));
         await page.evaluate(() => {
           var b = Array.from(document.querySelectorAll('button'))
-            .find(b => b.innerText.includes('Avvia')||b.innerText.includes('Start'));
+            .find(b => b.innerText.includes('Avvia') || b.innerText.includes('Start'));
           if (b) b.click();
         });
         lastReload = Date.now();
