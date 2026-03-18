@@ -1,9 +1,11 @@
-FROM ghcr.io/puppeteer/puppeteer:21.0.0
+# Immagine ufficiale Puppeteer — Node 20 + Chromium già installati
+# npm install scarica solo puppeteer-core (~5MB), zero download Chromium
+FROM ghcr.io/puppeteer/puppeteer:20.9.0
 
-# Puppeteer image già include Node 18 + Chromium + tutte le dipendenze
-# Non serve installare nulla
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable
 
-WORKDIR /app
+WORKDIR /home/pptruser/app
 
 COPY package.json ./
 RUN npm install
