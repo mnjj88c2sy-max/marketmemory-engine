@@ -2,13 +2,6 @@
   "name": "marketmemory-keeper",
   "version": "1.0.0",
   "main": "keeper.js",
-  "scripts": {
-    "start": "node keeper.js"
-  },
-  "dependencies": {
-    "puppeteer-core": "21.0.0"
-  },
-  "engines": {
-    "node": ">=18"
-  }
+  "scripts": { "start": "node keeper.js" },
+  "dependencies": { "puppeteer": "21.0.0" }
 }
