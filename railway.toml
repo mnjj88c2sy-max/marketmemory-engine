@@ -1,6 +1,3 @@
-[build]
-buildCommand = "npm install && npx playwright install chromium --with-deps"
-
 [deploy]
 startCommand = "node keeper.js"
 restartPolicyType = "ON_FAILURE"

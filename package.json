@@ -6,7 +6,7 @@
     "start": "node keeper.js"
   },
   "dependencies": {
-    "playwright-chromium": "^1.40.0"
+    "puppeteer-core": "^21.0.0"
   },
   "engines": {
     "node": ">=18"
