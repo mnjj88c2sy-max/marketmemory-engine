@@ -1,8 +1,8 @@
-// MarketMemory — Railway Keeper v2
-// Apre la pagina Netlify in un browser headless e la mantiene viva H24.
-// Non modifica app.js. Non interferisce con la logica del motore.
+// MarketMemory — Railway Keeper v3
+// Usa puppeteer-core + Chromium di sistema (no download ~170MB)
 
-const puppeteer = require('puppeteer');
+const puppeteer = require('puppeteer-core');
+const { execSync } = require('child_process');
 
 const APP_URL      = process.env.MM_URL            || 'https://YOUR-APP.netlify.app';
 const RELOAD_EVERY = parseInt(process.env.RELOAD_EVERY_MIN || '120') * 60 * 1000;
@@ -14,9 +14,34 @@ function ts() {
 }
 function log(msg) { console.log(`[${ts()}] ${msg}`); }
 
+// Trova Chromium installato nel sistema
+function findChromium() {
+  const paths = [
+    '/usr/bin/chromium',
+    '/usr/bin/chromium-browser',
+    '/usr/bin/google-chrome',
+    '/usr/bin/google-chrome-stable',
+  ];
+  for (const p of paths) {
+    try {
+      execSync(`test -f ${p}`);
+      return p;
+    } catch(_) {}
+  }
+  // Fallback: cerca con which
+  try {
+    return execSync('which chromium || which chromium-browser || which google-chrome', {encoding:'utf8'}).trim();
+  } catch(_) {}
+  return null;
+}
+
 async function launch() {
-  log('Avvio Puppeteer...');
+  const execPath = findChromium();
+  if (!execPath) throw new Error('Chromium non trovato nel sistema');
+  log(`Chromium trovato: ${execPath}`);
+
   const browser = await puppeteer.launch({
+    executablePath: execPath,
     headless: 'new',
     args: [
       '--no-sandbox',
@@ -30,7 +55,6 @@ async function launch() {
   });
 
   const page = await browser.newPage();
-
   page.on('console', msg => {
     if (msg.type() === 'error') log(`[browser:error] ${msg.text()}`);
   });
@@ -39,25 +63,20 @@ async function launch() {
   log(`Apertura ${APP_URL}`);
   await page.goto(APP_URL, { waitUntil: 'networkidle2', timeout: 60000 });
   log('Pagina caricata. Motore attivo.');
-
   return { browser, page };
 }
 
-// Health check dinamico: verifica che il motore stia davvero girando
 async function checkAlive(page) {
   return await page.evaluate(() => {
     try {
       const s = window.state;
       if (!s) return { ok: false, reason: 'state undefined' };
-      const lastCycle = s.lastCycleAt || s.meta?.lastCycleAt || null;
-      const openTrades = (s.paper?.open || []).length;
-      const closedTrades = (s.paper?.closed || []).length;
       return {
         ok: true,
-        lastCycle,
-        openTrades,
-        closedTrades,
-        regime: s.lastAnalysis?.regimeResult?.regime || null
+        lastCycle: s.lastCycleAt || (s.meta && s.meta.lastCycleAt) || null,
+        openTrades: (s.paper && s.paper.open ? s.paper.open.length : 0),
+        closedTrades: (s.paper && s.paper.closed ? s.paper.closed.length : 0),
+        regime: s.lastAnalysis && s.lastAnalysis.regimeResult ? s.lastAnalysis.regimeResult.regime : null
       };
     } catch(e) {
       return { ok: false, reason: e.message };
@@ -78,30 +97,26 @@ async function run() {
 
   setInterval(async () => {
     try {
-      // 1. Health check dinamico su window.state
       const alive = await checkAlive(page);
       if (alive.ok) {
-        log(`Health OK — regime:${alive.regime} open:${alive.openTrades} closed:${alive.closedTrades} lastCycle:${alive.lastCycle || 'n/a'}`);
+        log(`Health OK — regime:${alive.regime} open:${alive.openTrades} closed:${alive.closedTrades}`);
       } else {
         log(`Health WARN — ${alive.reason}`);
       }
-
-      // 2. Reload periodico per evitare memory leak e stato zombie
       if (Date.now() - lastReload > RELOAD_EVERY) {
         log('Reload periodico...');
         await page.reload({ waitUntil: 'networkidle2', timeout: 60000 });
         lastReload = Date.now();
         log('Reload completato.');
       }
-
     } catch (err) {
-      log(`Health check fallito: ${err.message} — riavvio browser...`);
+      log(`Check fallito: ${err.message} — riavvio...`);
       try { await browser.close(); } catch(_) {}
       try {
         ({ browser, page } = await launch());
         lastReload = Date.now();
-      } catch (relaunchErr) {
-        log(`Riavvio fallito: ${relaunchErr.message} — uscita.`);
+      } catch (e) {
+        log(`Riavvio fallito: ${e.message}`);
         process.exit(1);
       }
     }
